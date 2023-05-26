@@ -1,5 +1,5 @@
 ---
-title: "SAD Projekt zaliczeniowy 1, Mateusz Zacharecki 430263"
+title: "SDA Project"
 output:
   html_document:
     df_print: paged
