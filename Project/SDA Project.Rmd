@@ -1,0 +1,647 @@
+---
+title: "SAD Projekt zaliczeniowy 1, Mateusz Zacharecki 430263"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+```{r}
+# Biblioteki
+library(GGally)
+library(ggplot2)
+library(EnvStats)
+library(dplyr)
+library(plotrix)
+library(car)
+
+```
+
+```{r}
+# wczytywanie danych
+people <- read.csv(file = "people.csv", sep = ",", header = T)
+people
+nrow(people)
+
+# zamiana zmiennych w kolumnie stan_cywilny
+slownik <- c('1' = 'zamężna/żonaty', '0' = 'panna/kawaler')
+people$stan_cywilny <- slownik[as.character(people$stan_cywilny)]
+people
+
+# zmienne ilościowe
+people_ilościowe <- people[,c(1,2,3,6,8,9,10)]
+people_ilościowe
+ncol(people_ilościowe)
+
+# zmienne jakościowe
+people_jakościowe <- people[,-c(1,2,3,6,8,9,10)]
+people_jakościowe
+ncol(people_jakościowe)
+
+# sprawdzam występowanie braków danych
+people[!complete.cases(people),]
+
+```
+```{r}
+# Mamy 499 obserwacji
+# 7 zmiennych jest ilościowych (kolumny: 1,2,3,6,8,9,10), 3 zmienne są jakościowe (kolumny: 4,5,7)
+# Widzimy braki w kolumnie plec, braki wystąpiły 38 razy
+
+```
+
+```{r}
+# uzupełniam braki danych
+
+people$plec[!complete.cases(people$plec)] <- 'BRAK'
+people_jakościowe$plec[!complete.cases(people_jakościowe$plec)] <- 'BRAK'
+people
+
+```
+
+```{r}
+# tabele czestosci
+table(people$plec)
+table(people$stan_cywilny)
+table(people$budynek)
+
+# statystyki opisowe
+summary(people_ilościowe)
+
+# wariancja
+variance <- apply(people_ilościowe, 2, var)
+variance
+
+# odchylenie standardowe
+odchylenie <- apply(people_ilościowe, 2, sd)
+odchylenie
+
+```
+
+```{r}
+# O ile jest podobna liczba kobiet i mężczyzn, to panien/kawalerów jest znacznie więcej niż mężatek i żonatych
+# Rozkład budynków jest również nierównomierny, przeważają mieszkańcy domów jednorodzinnych
+# Średnie i mediany osiągają podobne wartości. Jedynie znaczna róznica jest w liczbie dzieci, średnia to 1.561, a mediana to 1. Jest to jednak całkiem uzasadnione, zmienna liczba_dzieci jest dyskretna. Stosunkowa duża różnica jest też między medianą i średnią oszczędności. Warto również zauważyć, że zmienna oszczędności (jako jedyna) osiąga ujemne wartości, co może być interpretowane jako deficyt w budżecie.
+# Wariancja nie wzbudza niepokoju
+# Czytając dane i myśląc o realiach, uwagę zwracają dane wzrost, pierwszy kwantyl jest na poziomie 155.8cm, większy niepokój jednak wzbudza największa wartość równa 235.2cm, co jest wartością oderwaną od jakichkolwiek norm. Najniższa osoba ma 113.6cm, co jest z kolei zdecydowanie mało, ze względu na to, że dzieci nie były brane w próbie (najmłodsza osoba ma 17 lat).
+
+```
+
+```{r}
+# obliczam współczynniki korelacji
+cor(people_ilościowe, method = "kendall")
+
+# Wykres korelacji dla danych ilościowych
+ggpairs(people_ilościowe, method = "kendall")
+
+# Wykres korelacji dla danych ilościowych z uwzględnieniem płci
+ggpairs(people, aes(col=plec), columns=c(1,2,3,6,8,9,10), method = "kendall")
+
+# Wykres korelacji dla danych ilościowych z uwzględnieniem budynku
+ggpairs(people, aes(col=budynek), columns=c(1,2,3,6,8,9,10), method = "kendall")
+
+# Wykres korelacji dla danych ilościowych z uwzględnieniem stanu cywilnego
+ggpairs(people, aes(col=stan_cywilny), columns=c(1,2,3,6,8,9,10), method = "kendall")
+
+```
+
+```{r}
+# Widzimy, że bardzo silnie ze sobą skorelowane są wydatki i wydatki na żywność
+# Silnie skorelowane ze sobą są róWnież waga ze wzrostem, wydatki z liczbą dzieci, wydatki na żywność z liczbą dzieci, oszczędności z wiekiem
+# Zauważamy, że rodzaj płci nie wpływa istotnie na żaden z pozostałych atrybutów, korelacje są podobne
+# Zauważamy, że nie ma istotnych różnic w korelacjach w zależności od typu budynku. Podobnie dla stanu cywilnego.
+# Obserwujemy bardzo dużą istotność statystyczną między wydatkami a wiekiem, wydatkami na żywność a wiekiem, oszczędnościami a wiekiem, wzrostem a wagą, wydatkami a wzrostem, wydatkami na żywność a wzrostem, wydatkami a liczbą dzieci, wydatkami na żywność a liczbą dzieci, wydatkami na żywność a wydatkami
+# Obserwujemy dużą istotność statystyczną między wydatkami na żywność a wagą, wydatkami a wagą
+# W miarę istotne statystycznie są oszczędności i wydatki, oszczędności i wydatki na żywność
+
+```
+
+```{r}
+# scatter-plot
+pairs(~wiek+waga+wzrost+liczba_dzieci+wydatki+wydatki_zywnosc+oszczednosci, data=people, main="scatter-plot")
+
+```
+
+```{r}
+# Wnioski z wykresu podobne jak w punkcie drugim (tylko jest ich mniej):
+# Widzimy, że bardzo silnie ze sobą skorelowane są wydatki i wydatki na żywność
+# Silnie skorelowane ze sobą są róWnież waga ze wzrostem, wydatki z liczbą dzieci, wydatki na żywność z liczbą dzieci, oszczędności z wiekiem
+
+```
+
+```{r}
+boxplot_zz <- filter(people, stan_cywilny=="zamężna/żonaty")
+boxplot_pk <- filter(people, stan_cywilny=="panna/kawaler")
+
+# boxplot dla mężatek/żonatych
+boxplot(boxplot_zz$oszczednosci, main="boxplot(zamężna/żonaty)")
+
+# boxplot dla panien/kawalerów
+boxplot(boxplot_pk$oszczednosci, main="boxplot(panna/kawaler)")
+
+```
+
+```{r}
+# Mediana równa około 500 w obu przypadkach, pierwszy kwartyl nieco powyżej zera, trzeci kwartyl to prawie 1000.
+# Porównując z wcześniej wyznaczonymi statystyki widzimy mniej więcej zgodność, pierwszy kwartyl dla oszczędności to 72.87, mediana to 401, a trzeci kwartyl to 802.15
+# Uwagę zwracają odstające wartości u góry wykresu, w przypadku mężatek i żonatych mamy dwie takie obserwacje, w przypadku panien i kawalerów jest ich 7. Trzeba jednak pamiętać, że panien i kawaleróW jest ogółem istotnie więcej niż mężatek i żonatych
+
+```
+
+```{r}
+# Rozkład budynku (przypomnienie)
+table(people$budynek)
+
+# Przygotowuję dane do wykresu pie chart
+slices <- c(54, 187, 105, 53, 100)
+lbls <- c("apartament", "jednorodzinny", "kamienica", "loft", "wielka_plyta")
+pct <- round(slices/sum(slices)*100)
+lbls <- paste(lbls, pct)
+lbls <- paste(lbls,"%",sep="")
+
+# Pie chart
+pie3D(slices, labels=lbls, main="pie chart")
+
+```
+
+```{r}
+# Z wykresu odczytujemy, że 37% badanych mieszka w domu jednorodzinnym, 21% w kamienicy, 20% w wielkiej płycie oraz po 11% w apartamencie i lofcie
+
+```
+
+```{r}
+kobiety <- filter(people, plec=="K")
+mezczyzni <- filter(people, plec=="M")
+
+# Wykres kwantylowy rozkładu wagi kobiet
+ggplot(kobiety, aes(sample=waga)) + stat_qq() + stat_qq_line()
+
+# Wykres kwantylowy rozkładu wagi mężczyzn
+ggplot(mezczyzni, aes(sample=waga)) + stat_qq() + stat_qq_line()
+
+```
+
+```{r}
+# Z wykresu kwantylowego wnioskujemy, że mimo ogonów na końcach, próby są na tyle duże, że dane zarówno dotyczące wagi kobiet, jak i wagi mężczyzn pochodzą z rozkładu normalnego
+
+```
+
+```{r}
+# H0: średnia waga kobiet wynosi 70kg
+# H1: średnia waga kobiet jest mniejsza niż 70kg
+
+# średnia i wariancja są nieznane, dane pochodzą z rozkładu normalnego
+# stosuję test istotości dla średniej
+
+# średnia, wariancja, liczebność
+mean_kobiety <- mean(kobiety$waga)
+sd_kobiety <- sd(kobiety$waga)
+n_kobiety <- nrow(kobiety)
+
+# statystyka testowa
+t_kobiety <- ((mean_kobiety-70)*sqrt(n_kobiety-1))/sd_kobiety
+
+# p-value
+p_kobiety <- pt(t_kobiety, n_kobiety-1)
+p_kobiety
+
+```
+
+```{r}
+# Otrzymujemy p-value 7.022049 * 10^-5
+
+```
+
+```{r}
+# H0: średnia waga mężczyzn wynosi 70kg
+# H1: średnia waga mężczyzn jest mniejsza niż 70kg
+
+# średnia i wariancja są nieznane, dane pochodzą z rozkładu normalnego
+# stosuję test istotości dla średniej
+
+# średnia, wariancja, liczebność
+mean_mezczyzni <- mean(mezczyzni$waga)
+sd_mezczyzni <- sd(mezczyzni$waga)
+n_mezczyzni <- nrow(mezczyzni)
+
+# statystyka testowa
+t_mezczyzni <- ((mean_mezczyzni-70)*sqrt(n_mezczyzni-1))/sd_mezczyzni
+
+# p-value
+p_mezczyzni <- pt(t_mezczyzni, n_mezczyzni-1)
+p_mezczyzni
+
+```
+
+```{r}
+# Otrzymujemy p-value 0.1534241
+
+```
+
+```{r}
+# H0: mediana wagi kobiet jest równa 65
+# H1: mediana wagi kobiet jest mniejsza od 65
+
+# próby sparowane, test Wilcoxona
+wilcox.test(kobiety$waga, mu = 65, alternative = "less")$p.value
+
+```
+
+```{r}
+# Otrzymujemy p-value 0.9951611
+
+```
+
+```{r}
+# H0: mediana wagi mężczyzn jest równa 65
+# H1: mediana wagi mężczyzn jest mniejsza od 65
+
+# próby sparowane, test Wilcoxona
+wilcox.test(mezczyzni$waga, mu = 65, alternative = "less")$p.value
+
+```
+
+```{r}
+# Otrzymujemy p-value 0.9999909
+
+```
+
+```{r}
+# wykres kwantylowy dla zmiennej wiek
+ggplot(people, aes(sample=wiek)) + stat_qq() + stat_qq_line()
+
+```
+
+```{r}
+# Mimo że dane są dyskretne, układają się one na wykresie kwantylowym zgodnie z rozkładem normalnym, przyjmijmy, że dane pochodzą z rozkładu normalnego
+
+```
+
+```{r}
+# wyznaczam przedział ufności dla średniej zmiennej wiek
+# rozkład jest normalny, średnia i wariancja nieznane
+# Przedział ufności dla wartości oczekiwanej. Model 2 z wykładu o estymatorach
+
+alpha <- 0.01
+
+# średnia, wariancja, liczebność
+mean_wiek <- mean(people$wiek)
+sd_wiek <- sd(people$wiek)
+n_wiek <- nrow(people)
+
+# statystyka testowa
+t_wiek <- qt(1-alpha/2, n_wiek-1)
+
+# początek przedziału
+lewy_mean <- mean_wiek - t_wiek*sd_wiek/sqrt(n_wiek-1)
+lewy_mean
+
+# koniec przedziału
+prawy_mean <- mean_wiek + t_wiek*sd_wiek/sqrt(n_wiek-1)
+prawy_mean
+
+```
+
+```{r}
+# Otrzymujemy przedział ufności dla średniej zmiennej wiek: (38.42674, 40.50712)
+
+```
+
+```{r}
+# wyznaczam przedział ufności dla wariancji zmiennej wiek
+# rozkład jest normalny, średnia i wariancja nieznane
+# Przedział ufności dla odchylenia standardowego
+
+alpha <- 0.01
+
+# statystyka testowa dla lewego końca przedziału
+lewy_chisq_wiek <- qchisq(1-alpha/2, n_wiek-1)
+
+# statystyka testowa dla prawego końca przedziału
+prawy_chisq_wiek <- qchisq(alpha/2, n_wiek-1)
+
+# początek przedziału
+lewy_var <- (n_wiek*sd_wiek**2)/lewy_chisq_wiek
+sqrt(lewy_var)
+
+# koniec przedziału
+prawy_var <- (n_wiek*sd_wiek**2)/prawy_chisq_wiek
+sqrt(prawy_var)
+
+```
+
+```{r}
+# Otrzymujemy przedział ufności dla odchylenia standardowego zmiennej wiek: (8.305054, 9.779739)
+
+```
+
+```{r}
+# rozkład zmiennej wiek jest normalny
+
+print('Kwantyl 0.25:')
+as.numeric(jmuOutlier::quantileCI(x=people$wiek, probs=0.25, conf.level=0.99)[1,c("lower","upper")])
+
+print('Kwantyl 0.5:')
+as.numeric(jmuOutlier::quantileCI(x=people$wiek, probs=0.5, conf.level=0.99)[1,c("lower","upper")])
+
+print('Kwantyl 0.75:')
+as.numeric(jmuOutlier::quantileCI(x=people$wiek, probs=0.75, conf.level=0.99)[1,c("lower","upper")])
+
+```
+
+```{r}
+# Otrzymujemy przedział ufności dla kwantyla 0.25: (32, 35)
+# Otrzymujemy przedział ufności dla kwantyla 0.5: (38, 40)
+# Otrzymujemy przedział ufności dla kwantyla 0.25: (43, 47)
+
+```
+
+```{r}
+alpha1 <- 0.01
+
+# Podział danych na mężatki/żonatych oraz panny/kawalerowie, wiek poniżej 40
+proba1_zz <- filter(people, stan_cywilny=="zamężna/żonaty", wiek<40)
+proba1_pk <- filter(people, stan_cywilny=="panna/kawaler", wiek<40)
+
+# wykresy kwantylowe dla obydwu próbek
+ggplot(proba1_zz, aes(sample=wydatki)) + stat_qq() + stat_qq_line()
+ggplot(proba1_pk, aes(sample=wydatki)) + stat_qq() + stat_qq_line()
+
+# liczebność prób
+nrow(proba1_zz)
+nrow(proba1_pk)
+
+```
+
+```{r}
+# Na podstawie wykresów kwantylowych stwierdzam, że w obydwu przypadkach dane wydatki pochodzą z rozkładu normalnego
+
+```
+
+```{r}
+# H0: średnie pomiędzy osobami zamężnymi/żonatymi a pannami/kawalerami w podpróbie osób w wieku poniżej 40 lat są takie same
+# H1: średnie pomiędzy osobami zamężnymi/żonatymi a pannami/kawalerami w podpróbie osób w wieku poniżej 40 lat są różne
+
+# Dane pochodzą z rozkładu normalnego
+# Mamy więcej niż 30 obserwacji w obu zbiorach danych
+# Nie znamy wariancji
+# Decyduję się na test t Welcha
+
+# średnia, wariancja, liczebność (osobno dla mężatek/żonatych i panien/kawaleróW)
+mean_zz <- mean(proba1_zz$wydatki)
+mean_pk <- mean(proba1_pk$wydatki)
+
+var_zz <- var(proba1_zz$wydatki)
+var_pk <- var(proba1_pk$wydatki)
+
+n_zz <- nrow(proba1_zz)
+n_pk <- nrow(proba1_pk)
+
+# Wartość statystyki testowej:
+t_proba1 <- (mean_zz - mean_pk)/sqrt((var_zz/n_zz)+(var_pk/n_pk))
+t_proba1
+
+# Stopień swobody:
+st_proba1 <- (((var_zz/n_zz)+(var_pk/n_pk))**2)/(((var_zz**2)/((n_zz**2)*(n_zz-1)))+((var_pk**2)/((n_pk**2)*(n_pk-1))))
+st_proba1
+
+# pvalue:
+pvalue1 <- 2*min(pt(t_proba1, st_proba1), 1-pt(t_proba1, st_proba1))
+pvalue1
+
+```
+
+```{r}
+# Dostajemy p-value na poziomie rzędu 10^-10, co zdecydowanie jest mniejsze od 0.01. Mamy więc solidne podstawy do odrzucenia hipotezy zerowej.
+# Stwierdzam, że średnie pomiędzy osobami zamężnymi/żonatymi a pannami/kawalerami w podpróbie osób w wieku poniżej 40 lat są różne.
+
+```
+
+```{r}
+# wybieram osoby w wieku poniżej 25 roku życia
+proba2 <- filter(people, wiek<25)
+
+# liczebność próby
+nrow(proba2)
+
+# wykresy kwantylowe wydatków i wydatkóW na żywność dla próby z zadania
+ggplot(proba2, aes(sample=wydatki)) + stat_qq() + stat_qq_line()
+ggplot(proba2, aes(sample=wydatki_zywnosc)) + stat_qq() + stat_qq_line()
+
+```
+
+```{r}
+# Obydwa wykresy kwantylowe sugerują pochodzenie danych wydatki i wydatki_zywnosc z rozkładu normalnego
+
+```
+
+```{r}
+# H0: wydatki i wydatki na żywność osób poniżej 25 roku życia mają tę samą średnią
+# H1: wydatki i wydatki na żywność osób poniżej 25 roku życia mają różną średnią
+
+# Dane pochodzą z rozkładu normalnego
+# Próby niezależne
+# Mała liczebność próby
+# Nieznane odchylenie standardowe
+# Korzystam z testu znalezionego tutaj (model 2): "https://cyrkiel.info/statystyka/test-dla-dwoch-srednich/"
+
+# średnie, wariancje dla zmiennych wydatki i wydatki na żywność
+mean_wyd <- mean(proba2$wydatki)
+mean_wyd_z <- mean(proba2$wydatki_zywnosc)
+
+var_wyd <- var(proba2$wydatki)
+var_wyd_z <- var(proba2$wydatki_zywnosc)
+
+# liczebność próby
+n_proba2 <- nrow(proba2)
+
+# wartość statystyki testowej
+t2 <- (mean_wyd - mean_wyd_z)/sqrt(((((n_proba2)*var_wyd)+((n_proba2)*var_wyd_z))*(2/n_proba2))/((2*n_proba2) - 2))
+t2
+
+# p-value
+pvalue2 <- 2*min(pt(t2, (2*n_proba2) - 2), 1-pt(t2, (2*n_proba2) - 2))
+pvalue2
+
+```
+
+```{r}
+# Otrzymujemy p-wartość równą 0.2336321 > 0.01. Nie mamy podstaw do odrzucenia hipotezy zerowej. Stwierdzam, że wydatki i wydatki na żywność mają tę samą średnią.
+
+```
+
+```{r}
+# H0: stosunek wydatków na żywność do wydatków NIE jest zależny od oszczędności
+# H1: stosunek wydatków na żywność do wydatków jest zależny od oszczędności
+
+# Zmienne ilościowe, brak konieczności normalności rozkładu
+# Decyduję się za testowanie korelacji Spearmana
+
+stosunek <- people$wydatki_zywnosc/people$wydatki
+
+pvalue3 <- cor.test(stosunek, people$oszczednosci, method = "spearman")$p.value
+pvalue3
+
+```
+
+```{r}
+# Otrzymujemy p-value 0.8379892. Tak duże p-value nie daje podstaw do odrzucenia hipotezy zerowej. Stwierdzam, że stosunek wydatków na żywność do wydatków nie jest zależny od oszczędności
+
+```
+
+```{r}
+# H0: Dane wzrost pochodzą z rozkładu wykładniczego z parametrem 10.
+# H1: Dane wzrost nie pochodzą z rozkładu wykładniczego z parametrem 10.
+
+# Dane wzrost pochodzą z rozkładu ciągłego, dość duża liczebność próby, próba prosta
+# Decyduję się na test Kołmogorowa-Smirnova
+
+# Generuję dane z rozkładu wykładniczego z parametrem 10
+
+wektor4 <- rexp(nrow(people), 10)
+
+p4 <- ks.test(people$wzrost, wektor4, exact = TRUE, conf.level=0.99)
+p4
+
+```
+
+```{r}
+# Otrzymujemy wartość p-value rzędu 10^-13. Mamy solidne podstawy do odrzucenia hipotezy zerowej.
+# Stwierdzam, że dane wzrost nie pochodzą z rozkładu wykładniczego z parametrem 10.
+
+```
+
+```{r}
+# regresja liniowa
+regresja <- lm(oszczednosci ~ ., people)
+summary(regresja)
+regresja
+
+# wartość RSS
+RSS <- sum(regresja$res^2)
+RSS
+
+```
+
+```{r}
+# Otrzymujemy RSS równy 5140662.
+# Otrzymujemy R^2 równe 0.9678.
+# P-wartości osiągają wartości rzędu poniżej 10^-16 dla wieku, liczby dzieci i budynków (względem apartamentu), wartość rzędu 10^-11 dla wzrostu, wartość rzędu 10^-11 dla wagi, 0.0192 dla wydatków, 0.6881 dla wydatków na żywność, 0.7093 dla stanu cywilnego (względem panien/kawaleróW), 0.4597 dla płci męskiej, 0.5049 dla płci żeńskiej (względem braku informacji o płci).
+# Oszacowania współczynników, beta_i:
+# beta_0 równe -651.0784, oraz bety przy odpowiednich atrybutach, wiek: 64.13609, waga: 3.65485, wzrost: -2.36460, plecK: -13.39411, plecM: -12.14340, stan_cywilnyzamężna/żonaty: -4.65660, liczba_dzieci: 154.62859, budynekjednorodzinny: -185.14412, budynekkamienica: -308.51277, budynekloft: -348.44842, budynekwielka_plyta:-571.63813, wydatki: -0.34321, wydatki_zywnosc: -0.07301
+
+```
+
+```{r}
+# regresja bez zmiennej wiek
+regresja_wiek <- lm(oszczednosci ~ .-wiek, people)
+summary(regresja_wiek)
+
+# RSS bez zmiennej wiek
+RSS_wiek <- sum(regresja_wiek$res^2)
+RSS_wiek
+
+# regresja bez zmiennej waga
+regresja_waga <- lm(oszczednosci ~ .-waga, people)
+summary(regresja_waga)
+
+# RSS bez zmiennej waga
+RSS_waga <- sum(regresja_waga$res^2)
+RSS_waga
+
+# regresja bez zmiennej wzrost
+regresja_wzrost <- lm(oszczednosci ~ .-wzrost, people)
+summary(regresja_wzrost)
+
+# RSS bez zmiennej wzrost
+RSS_wzrost <- sum(regresja_wzrost$res^2)
+RSS_wzrost
+
+# regresja bez zmiennej plec
+regresja_plec <- lm(oszczednosci ~ .-plec, people)
+summary(regresja_plec)
+
+# RSS bez zmiennej plec
+RSS_plec <- sum(regresja_plec$res^2)
+RSS_plec
+
+# regresja bez zmiennej stan_cywilny
+regresja_stan_cywilny <- lm(oszczednosci ~ .-stan_cywilny, people)
+summary(regresja_stan_cywilny)
+
+# RSS bez zmiennej stan_cywilny
+RSS_stan_cywilny <- sum(regresja_stan_cywilny$res^2)
+RSS_stan_cywilny
+
+# regresja bez zmiennej liczba_dzieci
+regresja_liczba_dzieci <- lm(oszczednosci ~ .-liczba_dzieci, people)
+summary(regresja_liczba_dzieci)
+
+# RSS bez zmiennej liczba_dzieci
+RSS_liczba_dzieci <- sum(regresja_liczba_dzieci$res^2)
+RSS_liczba_dzieci
+
+# regresja bez zmiennej budynek
+regresja_budynek <- lm(oszczednosci ~ .-budynek, people)
+summary(regresja_budynek)
+
+# RSS bez zmiennej budynek
+RSS_budynek <- sum(regresja_budynek$res^2)
+RSS_budynek
+
+# regresja bez zmiennej wydatki
+regresja_wydatki <- lm(oszczednosci ~ .-wydatki, people)
+summary(regresja_wydatki)
+
+# RSS bez zmiennej wydatki
+RSS_wydatki <- sum(regresja_wydatki$res^2)
+RSS_wydatki
+
+# regresja bez zmiennej wydatki_zywnosc
+regresja_wydatki_zywnosc <- lm(oszczednosci ~ .-wydatki_zywnosc, people)
+summary(regresja_wydatki_zywnosc)
+
+# RSS bez zmiennej wydatki_zywnosc
+RSS_wydatki_zywnosc <- sum(regresja_wydatki_zywnosc$res^2)
+RSS_wydatki_zywnosc
+
+```
+
+```{r}
+# tworzę tabelę z różnicami w R^2 (o ile się zmniejsza po usunięciu zmiennej), różnicami w RSS (o ile się zwiększa po usunięciu zmiennej) dla poszczególnych zmiennych
+nazwa <- c("wiek", "waga", "wzrost", "plec", "stan_cywilny", "liczba_dzieci", "budynek", "wydatki", "wydatki_zywnosc")
+roznice_R2 <- c(0.9678 - 0.04196, 0.9678 - 0.9649, 0.9678 - 0.9647, 0.9678 - 0.9678, 
+                0.9678 - 0.9678, 0.9678 - 0.9231, 0.9678 - 0.9049, 0.9678 - 0.9675, 0.9678 - 0.9678)
+roznice_RSS <- c(RSS_wiek - RSS, RSS_waga - RSS, RSS_wzrost - RSS, RSS_plec - RSS, 
+                 RSS_stan_cywilny - RSS, RSS_liczba_dzieci - RSS, RSS_budynek - RSS, RSS_wydatki - RSS, RSS_wydatki_zywnosc - RSS)
+
+data <- data.frame(nazwa, roznice_R2, roznice_RSS)
+data
+
+```
+
+```{r}
+# widzimy, że im bardziej maleje wartość R^2 po usunięciu zmiennej, tym bardziej wzrasta RSS (co swoją drogą ma sens). Obserwujemy jednak wysokie p-wartości dla płci, stanu cywilnego i wydatków na żywność. Dla tych zmiennych obserwuje się zerowy spadek R^2 po ich usunięciu, płeć ma niższe p-value, więc jest bardziej istotna statystycznie, najmniej istotna statystycznie wydaje się zmienna stan_cywilny, jednak obserwujemy niewielki wzrost RSS po usunięciu tych zmiennych, podobny dla zmiennych stan_cywilny, wydatki_zywnosc, istotnie wyższy dla zmiennej plec. Ostatecznie w mojej ocenie p-wartość zwyciężyła nad RSS i decyduję się na odrzucenie z pełnego modelu zmiennej stan_cywilny.
+
+```
+
+```{r}
+# buduję model bez zmiennej plec
+regresja_stan_cywilny <- lm(oszczednosci ~ .-stan_cywilny, people)
+
+car::qqPlot(regresja_stan_cywilny$residuals, main="Normalność rozkładu reszt")
+plot(regresja_stan_cywilny, which = 1, main="wykres zależności reszt od zmiennej objaśnianej")
+plot(ts(regresja_stan_cywilny$residuals), main="Wykres reszt względem numeru obserwacji")
+plot(regresja_stan_cywilny, which=5, main="wykres reszt studentyzowanych i dźwigni")
+summary(regresja_stan_cywilny)
+
+```
+
+```{r}
+# Wnioski: 
+# Widzimy odstające ostatnie wartości na wykresie kwantylowym, jednak mamy dużą liczebność próby, być może to błędne obserwacje, poza tym dane są dopasowane do wykresu kwantylowego dla rozkładu normalnego, stwierdzam więc, że rozkład jest normalny
+# Dane na wykresie Residuals vs fitted są chmurowe, jedynie niepokojące są 3 dane w lewym górnym rogu, jednak może to być zaniedbane, czerwona linia trendu układa się w prostą, stwierdzam więc homoskedatyczność składnika losowego
+# Wykres szeregu czasowego oscyluje lekko wokół sinusoidy, jednak nie aż tak bardzo, żeby budziło to niepokój. Amplituda w miarę stała. Stwierdzam ostatecznie brak autokorelacji.
+# Na wykresie reszt studentyzowanych i dźwigni nie obserwujemy danych, które mają wysokie wartości dźwigni i jednocześnie wysokie co do wartości bezwzględnej reszty studentyzowane. Dane nie mają wysokich wartości odległości Cooka. Stwierdzam brak obserwacji odstających
+
+```
